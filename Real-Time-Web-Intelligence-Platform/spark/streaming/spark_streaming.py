@@ -7,7 +7,12 @@ from spark.utils.stopwords import remove_stopwords
 from spark.utils.tfidf import apply_tfidf
 from spark.utils.trending import detect_trending
 
+from spark.utils.cassandra_writer import write_metadata, write_trending
 
+
+# --------------------------------
+# Spark Session
+# --------------------------------
 spark = SparkSession.builder \
     .appName("RealTimeWebIntelligence") \
     .config(
@@ -16,7 +21,12 @@ spark = SparkSession.builder \
     ) \
     .getOrCreate()
 
+spark.sparkContext.setLogLevel("WARN")
 
+
+# --------------------------------
+# Schema
+# --------------------------------
 schema = StructType([
     StructField("title", StringType(), True),
     StructField("link", StringType(), True),
@@ -28,6 +38,9 @@ schema = StructType([
 ])
 
 
+# --------------------------------
+# Kafka Stream
+# --------------------------------
 df = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "localhost:9092") \
@@ -55,34 +68,81 @@ text_df = parsed.withColumn(
 )
 
 
-# 🚀 Production foreachBatch processing
-
+# --------------------------------
+# Production Batch Processing
+# --------------------------------
 def process_batch(batch_df, batch_id):
 
-    print(f"Processing batch {batch_id}")
+    print(f"\n🚀 Processing batch {batch_id}")
 
     # Skip empty batch
     if batch_df.count() == 0:
         print("Empty batch — skipping")
         return
 
+    # -----------------------------
+    # Text Processing
+    # -----------------------------
     cleaned = clean_text(batch_df, "text")
 
     tokenized = tokenize(cleaned)
 
     filtered = remove_stopwords(tokenized)
 
-    # Skip empty tokens
     if filtered.count() == 0:
         print("No tokens — skipping")
         return
 
+    # -----------------------------
+    # TF-IDF
+    # -----------------------------
     tfidf = apply_tfidf(filtered)
 
+    # -----------------------------
+    # Trending Detection
+    # -----------------------------
     trending = detect_trending(filtered)
 
+    # Remove empty words
+    trending = trending.filter(
+        (col("word").isNotNull()) &
+        (col("word") != "")
+    )
+
+    # Show console
     trending.show(truncate=False)
 
+    # -----------------------------
+    # Write to Cassandra
+    # -----------------------------
+    rows = trending.collect()
+
+    for row in rows:
+        try:
+            write_trending(row["word"], row["count"])
+        except Exception as e:
+            print("Cassandra Write Error:", e)
+
+    # -----------------------------
+    # Write metadata
+    # -----------------------------
+    meta_rows = batch_df.collect()
+
+    for row in meta_rows:
+        try:
+            write_metadata(
+            row["title"],
+            row["source"],
+            row["published"],
+            row["timestamp"]
+        )
+        except Exception as e:
+            print("Metadata Write Error:", e)
+
+
+# --------------------------------
+# Streaming Query
+# --------------------------------
 query = text_df.writeStream \
     .foreachBatch(process_batch) \
     .outputMode("append") \
