@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+venv/
+.env/
+.env.*
+
+# Logs
+*.log
+
+# Mac
+.DS_Store
+
+# Spark
+*.jar
+
+# IDE
+.vscode/
+.idea/
+
+# Data
+data/
+tmp/
