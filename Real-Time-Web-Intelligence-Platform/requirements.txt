@@ -1,0 +1,5 @@
+kafka-python
+requests
+feedparser
+beautifulsoup4
+faker
