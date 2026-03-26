@@ -15,6 +15,13 @@ from spark.utils.ranking import (
     combine_ranking
 )
 
+from spark.utils.cassandra_writer import (
+    write_metadata,
+    write_trending,
+    get_alerts,
+    write_triggered_alert
+)
+
 # --------------------------------
 # Spark Session
 # --------------------------------
@@ -163,7 +170,16 @@ def process_batch(batch_df, batch_id):
             )
         except Exception as e:
             print("Metadata Write Error:", e)
+    # -----------------------------
+    # Alert Detection
+    # -----------------------------
+    alerts = get_alerts()
 
+    alert_words = ranked.select("word").collect()
+
+    for row in alert_words:
+        if row["word"] in alerts:
+            write_triggered_alert(row["word"])
 
 # --------------------------------
 # Streaming Query

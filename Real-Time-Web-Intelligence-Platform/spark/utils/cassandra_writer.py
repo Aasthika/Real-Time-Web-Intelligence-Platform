@@ -51,3 +51,41 @@ def write_metadata(title, source, published, timestamp):
             datetime.utcnow()
         )
     )
+
+# --------------------------------
+# Add Alert
+# --------------------------------
+def add_alert(keyword):
+
+    session.execute(
+        """
+        INSERT INTO user_alerts (keyword, created_at)
+        VALUES (%s, toTimestamp(now()))
+        """,
+        (keyword,)
+    )
+
+
+# --------------------------------
+# Get Alerts
+# --------------------------------
+def get_alerts():
+
+    rows = session.execute(
+        "SELECT keyword FROM user_alerts"
+    )
+
+    alerts = []
+
+    for row in rows:
+        alerts.append(row.keyword)
+
+    return alerts
+
+
+# --------------------------------
+# Trigger Alert
+# --------------------------------
+def write_triggered_alert(word):
+
+    print(f"\n🚨 ALERT TRIGGERED: {word}")

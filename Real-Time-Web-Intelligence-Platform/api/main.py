@@ -48,16 +48,18 @@ def trending():
 alerts = []
 
 
+from api.database import add_alert
+
+
 @app.post("/alerts")
 def create_alert(data: AlertRequest):
 
-    alerts.append(data.keyword)
+    add_alert(data.keyword)
 
     return {
         "status": "alert added",
-        "alerts": alerts
+        "keyword": data.keyword
     }
-
 
 # --------------------------------
 # Analytics API

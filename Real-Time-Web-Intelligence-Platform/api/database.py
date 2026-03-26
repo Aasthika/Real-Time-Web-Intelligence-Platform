@@ -1,9 +1,13 @@
 from cassandra.cluster import Cluster
+from datetime import datetime
 
 cluster = Cluster(["localhost"])
 session = cluster.connect("realtime")
 
 
+# -----------------------------
+# Trending
+# -----------------------------
 def get_trending():
 
     query = """
@@ -26,6 +30,9 @@ def get_trending():
     return results
 
 
+# -----------------------------
+# Search
+# -----------------------------
 def search_query(keyword):
 
     query = """
@@ -48,11 +55,12 @@ def search_query(keyword):
     return results
 
 
+# -----------------------------
+# Analytics
+# -----------------------------
 def analytics():
 
-    query = """
-    SELECT COUNT(*) FROM trending_topics
-    """
+    query = "SELECT COUNT(*) FROM trending_topics"
 
     rows = session.execute(query)
 
@@ -60,3 +68,20 @@ def analytics():
         return {
             "total_trending_words": row.count
         }
+
+
+# -----------------------------
+# Add Alert
+# -----------------------------
+def add_alert(keyword):
+
+    session.execute(
+        """
+        INSERT INTO user_alerts (keyword, created_at)
+        VALUES (%s, %s)
+        """,
+        (
+            keyword,
+            datetime.utcnow()
+        )
+    )
