@@ -10,25 +10,22 @@ session = cluster.connect("realtime")
 # --------------------------------
 # Write Trending
 # --------------------------------
-def write_trending(word, count):
+def write_trending(word, count, score):
 
     if word is None:
         return
 
-    word = str(word).strip()
-
-    if word == "":
-        return
-
-    if count is None:
-        return
-
     session.execute(
         """
-        INSERT INTO trending_topics (word, count)
-        VALUES (%s, %s)
+        INSERT INTO trending_topics
+        (word, count, score)
+        VALUES (%s, %s, %s)
         """,
-        (word, int(count))
+        (
+            word,
+            int(count),
+            float(score)
+        )
     )
 
 

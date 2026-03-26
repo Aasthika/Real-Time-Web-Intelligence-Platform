@@ -9,6 +9,11 @@ from spark.utils.trending import detect_trending
 
 from spark.utils.cassandra_writer import write_metadata, write_trending
 
+from spark.utils.ranking import (
+    apply_recency_ranking,
+    apply_popularity_ranking,
+    combine_ranking
+)
 
 # --------------------------------
 # Spark Session
@@ -93,49 +98,69 @@ def process_batch(batch_df, batch_id):
         print("No tokens — skipping")
         return
 
+
     # -----------------------------
     # TF-IDF
     # -----------------------------
     tfidf = apply_tfidf(filtered)
+
 
     # -----------------------------
     # Trending Detection
     # -----------------------------
     trending = detect_trending(filtered)
 
-    # Remove empty words
     trending = trending.filter(
         (col("word").isNotNull()) &
         (col("word") != "")
     )
 
-    # Show console
-    trending.show(truncate=False)
 
     # -----------------------------
-    # Write to Cassandra
+    # Ranking System
     # -----------------------------
-    rows = trending.collect()
+    ranked = apply_popularity_ranking(trending)
+
+    ranked = apply_recency_ranking(ranked)
+
+    ranked = combine_ranking(ranked)
+
+    ranked = ranked.orderBy("final_score", ascending=False)
+
+
+    # Show ranked output
+    ranked.show(truncate=False)
+
+
+    # -----------------------------
+    # Write Trending to Cassandra
+    # -----------------------------
+    rows = ranked.collect()
 
     for row in rows:
         try:
-            write_trending(row["word"], row["count"])
+            write_trending(
+                row["word"],
+                row["count"],
+                row["final_score"]
+            )
         except Exception as e:
             print("Cassandra Write Error:", e)
 
+
     # -----------------------------
-    # Write metadata
+    # Write Metadata
     # -----------------------------
     meta_rows = batch_df.collect()
 
     for row in meta_rows:
         try:
             write_metadata(
-            row["title"],
-            row["source"],
-            row["published"],
-            row["timestamp"]
-        )
+                row["title"],
+                row["source"],
+                row["published"],
+                row["timestamp"]
+            )
         except Exception as e:
             print("Metadata Write Error:", e)
 
