@@ -10,24 +10,30 @@ session = cluster.connect("realtime")
 # -----------------------------
 def get_trending():
 
-    query = """
-    SELECT word, count, score
-    FROM trending_topics
-    LIMIT 50
-    """
+    rows = session.execute(
+        "SELECT word, count, score FROM trending_topics"
+    )
 
-    rows = session.execute(query)
-
-    results = []
+    data = []
 
     for row in rows:
-        results.append({
+        data.append({
             "word": row.word,
             "count": row.count,
             "score": row.score
         })
 
-    return results
+    import pandas as pd
+
+    df = pd.DataFrame(data)
+
+    if len(df) == 0:
+        return []
+
+    df = df.sort_values("score", ascending=False)
+    df = df.drop_duplicates("word")
+
+    return df.head(20).to_dict("records")
 
 
 # -----------------------------

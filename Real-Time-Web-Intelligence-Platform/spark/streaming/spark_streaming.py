@@ -15,6 +15,8 @@ from spark.utils.ranking import (
     combine_ranking
 )
 
+from spark.utils.ml_classifier import train_model, classify
+
 from spark.utils.cassandra_writer import (
     write_metadata,
     write_trending,
@@ -34,7 +36,10 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")
-
+# --------------------------------
+# Load ML Model
+# --------------------------------
+model = train_model(spark)
 
 # --------------------------------
 # Schema
@@ -88,7 +93,7 @@ def process_batch(batch_df, batch_id):
     print(f"\n🚀 Processing batch {batch_id}")
 
     # Skip empty batch
-    if batch_df.count() == 0:
+    if batch_df.rdd.isEmpty():    
         print("Empty batch — skipping")
         return
 
@@ -134,23 +139,28 @@ def process_batch(batch_df, batch_id):
 
     ranked = ranked.orderBy("final_score", ascending=False)
 
+    # -----------------------------
+    # Classification
+    # -----------------------------
+    classified = classify(ranked, model)
 
-    # Show ranked output
-    ranked.show(truncate=False)
+    # Show classified output
+    classified.show(truncate=False)
 
 
     # -----------------------------
     # Write Trending to Cassandra
     # -----------------------------
-    rows = ranked.collect()
+    rows = classified.collect()
 
     for row in rows:
         try:
             write_trending(
-                row["word"],
-                row["count"],
-                row["final_score"]
-            )
+            row["word"],
+            row["count"],
+            row["final_score"],
+            row["category"]
+        )
         except Exception as e:
             print("Cassandra Write Error:", e)
 
@@ -175,7 +185,7 @@ def process_batch(batch_df, batch_id):
     # -----------------------------
     alerts = get_alerts()
 
-    alert_words = ranked.select("word").collect()
+    alert_words = classified.select("word").collect()
 
     for row in alert_words:
         if row["word"] in alerts:
