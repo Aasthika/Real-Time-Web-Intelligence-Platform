@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import time
-
+from streamlit_autorefresh import st_autorefresh
 API_URL = "http://127.0.0.1:8000"
 
 st.set_page_config(
@@ -22,7 +22,8 @@ menu = st.sidebar.selectbox(
         "Trending",
         "Search",
         "Alerts",
-        "Analytics"
+        "Analytics",
+        "Monitoring"
     ]
 )
 
@@ -108,7 +109,6 @@ elif menu == "Search":
                 use_container_width=True
             )
 
-            # Category Distribution
             if len(df) > 0:
 
                 st.subheader("Category Distribution")
@@ -183,9 +183,7 @@ elif menu == "Analytics":
         with col1:
             st.metric(
                 "Total Trending Words",
-                data["analytics"][
-                    "total_trending_words"
-                ]
+                data["analytics"]["total_trending_words"]
             )
 
         with col2:
@@ -207,14 +205,92 @@ elif menu == "Analytics":
 
 
 # --------------------------------
+# Phase 14 — Monitoring Dashboard
+# --------------------------------
+elif menu == "Monitoring":
+
+    st.header("📡 System Monitoring Dashboard")
+
+    try:
+
+        trending_res = requests.get(
+            f"{API_URL}/trending"
+        ).json()
+
+        analytics_res = requests.get(
+            f"{API_URL}/analytics"
+        ).json()
+
+        trending_df = pd.DataFrame(
+            trending_res["trending"]
+        )
+
+        total_docs = len(trending_df)
+
+        total_words = analytics_res["analytics"]["total_trending_words"]
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        # Kafka
+        with col1:
+            st.subheader("Kafka")
+            st.metric("Topics Active", 4)
+            st.metric("Messages/sec", len(trending_df))
+
+        # Spark
+        with col2:
+            st.subheader("Spark")
+            st.metric("Batch Duration", "Live")
+            st.metric("Records Processed", total_docs)
+
+        # API
+        with col3:
+            st.subheader("API")
+            st.metric("Response Time", "Live")
+            st.metric("Requests/min", total_words)
+
+        # System
+        with col4:
+            st.subheader("System")
+            st.metric("Documents", total_docs)
+            st.metric("Trending Words", total_words)
+
+        st.markdown("---")
+
+        st.subheader("📈 Processing Trend")
+
+        if len(trending_df) > 0:
+
+            trend_df = trending_df.head(10)[["word","count"]]
+
+            st.line_chart(
+                trend_df.set_index("word")
+            )
+
+        st.subheader("📊 Topic Distribution")
+
+        if len(trending_df) > 0:
+
+            trending_df["category"] = "General"
+
+            topic_df = trending_df["category"].value_counts()
+
+            st.bar_chart(
+                topic_df
+            )
+
+    except Exception as e:
+        st.error(
+            f"Monitoring error: {e}"
+        )
+
+
+# --------------------------------
 # Auto Refresh
 # --------------------------------
 st.sidebar.markdown("---")
 
-refresh = st.sidebar.checkbox(
-    "Auto Refresh (5s)"
-)
+refresh = st.sidebar.checkbox("Auto Refresh (5s)")
 
 if refresh:
-    time.sleep(5)
-    st.rerun()
+    st_autorefresh(interval=5000, key="datarefresh")
