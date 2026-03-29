@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
+import time
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -34,6 +35,7 @@ if menu == "Trending":
     st.header("🔥 Trending Topics")
 
     try:
+
         response = requests.get(
             f"{API_URL}/trending"
         )
@@ -44,10 +46,22 @@ if menu == "Trending":
             data["trending"]
         )
 
-        st.dataframe(
-            df,
-            use_container_width=True
-        )
+        col1, col2 = st.columns([2,1])
+
+        with col1:
+            st.subheader("Trending Table")
+            st.dataframe(df, width="stretch")
+
+        with col2:
+
+            st.subheader("Top Trending Chart")
+
+            if len(df) > 0:
+                chart_df = df.head(10)
+
+                st.bar_chart(
+                    chart_df.set_index("word")["count"]
+                )
 
     except Exception as e:
         st.error(
@@ -60,13 +74,19 @@ if menu == "Trending":
 # --------------------------------
 elif menu == "Search":
 
-    st.header("🔍 Search")
+    st.header("🔍 Search Intelligence")
 
-    query = st.text_input(
-        "Enter keyword"
-    )
+    col1, col2 = st.columns([3,1])
 
-    if st.button("Search"):
+    with col1:
+        query = st.text_input(
+            "Enter keyword"
+        )
+
+    with col2:
+        search_btn = st.button("Search")
+
+    if search_btn:
 
         try:
 
@@ -81,10 +101,21 @@ elif menu == "Search":
                 data["results"]
             )
 
+            st.subheader("Search Results")
+
             st.dataframe(
                 df,
                 use_container_width=True
             )
+
+            # Category Distribution
+            if len(df) > 0:
+
+                st.subheader("Category Distribution")
+
+                cat_df = df["category"].value_counts()
+
+                st.bar_chart(cat_df)
 
         except Exception as e:
             st.error(
@@ -97,13 +128,19 @@ elif menu == "Search":
 # --------------------------------
 elif menu == "Alerts":
 
-    st.header("🚨 Create Alert")
+    st.header("🚨 Alert Engine")
 
-    keyword = st.text_input(
-        "Alert keyword"
-    )
+    col1, col2 = st.columns([3,1])
 
-    if st.button("Create Alert"):
+    with col1:
+        keyword = st.text_input(
+            "Alert keyword"
+        )
+
+    with col2:
+        alert_btn = st.button("Create Alert")
+
+    if alert_btn:
 
         try:
 
@@ -113,7 +150,7 @@ elif menu == "Alerts":
             )
 
             st.success(
-                f"Alert created for: {keyword}"
+                f"✅ Alert created for: {keyword}"
             )
 
         except Exception as e:
@@ -121,13 +158,17 @@ elif menu == "Alerts":
                 f"Alert error: {e}"
             )
 
+    st.info(
+        "Alerts trigger automatically when keyword appears in real-time stream"
+    )
+
 
 # --------------------------------
 # Analytics Section
 # --------------------------------
 elif menu == "Analytics":
 
-    st.header("📊 Analytics")
+    st.header("📊 Analytics Intelligence")
 
     try:
 
@@ -137,12 +178,27 @@ elif menu == "Analytics":
 
         data = response.json()
 
-        st.metric(
-            "Total Trending Words",
-            data["analytics"][
-                "total_trending_words"
-            ]
-        )
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Total Trending Words",
+                data["analytics"][
+                    "total_trending_words"
+                ]
+            )
+
+        with col2:
+            st.metric(
+                "System Status",
+                "Running"
+            )
+
+        with col3:
+            st.metric(
+                "Streaming",
+                "Active"
+            )
 
     except Exception as e:
         st.error(
@@ -160,4 +216,5 @@ refresh = st.sidebar.checkbox(
 )
 
 if refresh:
-    st.experimental_rerun()
+    time.sleep(5)
+    st.rerun()

@@ -24,6 +24,8 @@ from spark.utils.cassandra_writer import (
     write_triggered_alert
 )
 
+from spark.utils.elasticsearch_writer import write_to_elasticsearch
+
 # --------------------------------
 # Spark Session
 # --------------------------------
@@ -154,15 +156,27 @@ def process_batch(batch_df, batch_id):
     rows = classified.collect()
 
     for row in rows:
+
         try:
+
+            # Cassandra
             write_trending(
-            row["word"],
-            row["count"],
-            row["final_score"],
-            row["category"]
-        )
+                row["word"],
+                row["count"],
+                row["final_score"],
+                row["category"]
+            )
+
+            # Elasticsearch
+            write_to_elasticsearch(
+                row["word"],
+                row["count"],
+                row["final_score"],
+                row["category"]
+            )
+
         except Exception as e:
-            print("Cassandra Write Error:", e)
+            print("Write Error:", e)
 
 
     # -----------------------------

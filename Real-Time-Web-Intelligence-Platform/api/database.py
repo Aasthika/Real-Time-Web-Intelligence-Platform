@@ -1,13 +1,27 @@
 from cassandra.cluster import Cluster
 from datetime import datetime
+from elasticsearch import Elasticsearch
+import pandas as pd
 
+
+# --------------------------------
+# Cassandra Connection
+# --------------------------------
 cluster = Cluster(["localhost"])
 session = cluster.connect("realtime")
 
 
-# -----------------------------
-# Trending
-# -----------------------------
+# --------------------------------
+# Elasticsearch Connection
+# --------------------------------
+es = Elasticsearch("http://localhost:9200")
+
+INDEX_NAME = "web_intelligence"
+
+
+# --------------------------------
+# Trending (From Cassandra)
+# --------------------------------
 def get_trending():
 
     rows = session.execute(
@@ -23,8 +37,6 @@ def get_trending():
             "score": row.score
         })
 
-    import pandas as pd
-
     df = pd.DataFrame(data)
 
     if len(df) == 0:
@@ -36,34 +48,46 @@ def get_trending():
     return df.head(20).to_dict("records")
 
 
-# -----------------------------
-# Search
-# -----------------------------
+# --------------------------------
+# Search (From Elasticsearch)
+# --------------------------------
 def search_query(keyword):
 
-    query = """
-    SELECT word, count, score
-    FROM trending_topics
-    WHERE word=%s
-    """
+    query = {
+        "size": 100,
+        "query": {
+            "match": {
+                "word": keyword
+            }
+        },
+        "sort": [
+            {"score": {"order": "desc"}},
+            {"timestamp": {"order": "desc"}}
+        ]
+    }
 
-    rows = session.execute(query, [keyword])
+    res = es.search(
+        index=INDEX_NAME,
+        body=query
+    )
 
     results = []
+    seen = set()
 
-    for row in rows:
-        results.append({
-            "word": row.word,
-            "count": row.count,
-            "score": row.score
-        })
+    for hit in res["hits"]["hits"]:
 
-    return results
+        data = hit["_source"]
+
+        if data["word"] not in seen:
+            results.append(data)
+            seen.add(data["word"])
+
+    return results[:20]
 
 
-# -----------------------------
+# --------------------------------
 # Analytics
-# -----------------------------
+# --------------------------------
 def analytics():
 
     query = "SELECT COUNT(*) FROM trending_topics"
@@ -76,9 +100,9 @@ def analytics():
         }
 
 
-# -----------------------------
+# --------------------------------
 # Add Alert
-# -----------------------------
+# --------------------------------
 def add_alert(keyword):
 
     session.execute(

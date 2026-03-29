@@ -6,10 +6,11 @@ from kafka import KafkaProducer
 KAFKA_BROKER = "localhost:9092"
 TOPIC = "research-topic"
 
+# Reliable Research RSS Feeds
 RESEARCH_FEEDS = [
-    "http://export.arxiv.org/rss/cs.AI",
-    "http://export.arxiv.org/rss/cs.LG",
-    "http://export.arxiv.org/rss/stat.ML"
+    "https://www.sciencedaily.com/rss/computers_math/artificial_intelligence.xml",
+    "https://www.sciencedaily.com/rss/computers_math/machine_learning.xml",
+    "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml"
 ]
 
 producer = KafkaProducer(
@@ -19,10 +20,19 @@ producer = KafkaProducer(
 
 
 def fetch_research():
+
+    print("\n🚀 Fetching Research Feeds...")
+
     for feed_url in RESEARCH_FEEDS:
+
+        print("Checking:", feed_url)
+
         feed = feedparser.parse(feed_url)
 
-        for entry in feed.entries:
+        print("Entries found:", len(feed.entries))
+
+        for entry in feed.entries[:10]:
+
             data = {
                 "title": entry.title,
                 "link": entry.link,
@@ -34,11 +44,16 @@ def fetch_research():
 
             producer.send(TOPIC, data)
 
+    producer.flush()
+
 
 def main():
+
+    print("🚀 Research crawler started")
+
     while True:
         fetch_research()
-        time.sleep(60)
+        time.sleep(30)
 
 
 if __name__ == "__main__":

@@ -18,6 +18,24 @@ def write_trending(word, count, score, category="general"):
     if word is None:
         return
 
+    # Get existing count
+    rows = session.execute(
+        """
+        SELECT count FROM trending_topics
+        WHERE word = %s
+        LIMIT 1
+        """,
+        (word,)
+    )
+
+    existing_count = 0
+
+    for row in rows:
+        existing_count = row.count
+
+    new_count = existing_count + int(count)
+
+    # Update total count
     session.execute(
         """
         INSERT INTO trending_topics
@@ -26,7 +44,7 @@ def write_trending(word, count, score, category="general"):
         """,
         (
             word,
-            int(count),
+            new_count,
             float(score),
             str(category),
             datetime.utcnow()
