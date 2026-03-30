@@ -1,5 +1,14 @@
+fastapi
+uvicorn
 kafka-python
-requests
+cassandra-driver
+elasticsearch==8.11.1
 feedparser
-beautifulsoup4
-faker
+pandas
+streamlit
+streamlit-autorefresh
+requestsCREATE KEYSPACE realtime
+WITH replication = {
+'class': 'SimpleStrategy',
+'replication_factor': 1
+};

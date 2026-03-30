@@ -20,13 +20,21 @@ app = FastAPI(
 @app.post("/search")
 def search(data: SearchRequest):
 
-    results = search_query(data.query)
+    try:
 
-    return {
-        "status": "success",
-        "results": results
-    }
+        results = search_query(data.query)
 
+        return {
+            "status": "success",
+            "results": results
+        }
+
+    except Exception as e:
+
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 # --------------------------------
 # Trending API

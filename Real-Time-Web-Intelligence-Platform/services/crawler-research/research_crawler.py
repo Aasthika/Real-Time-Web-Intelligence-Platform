@@ -3,33 +3,39 @@ import time
 import feedparser
 from kafka import KafkaProducer
 
-KAFKA_BROKER = "localhost:9092"
+
+KAFKA_BROKER = "kafka:9092"
 TOPIC = "research-topic"
 
-# Reliable Research RSS Feeds
+
+producer = None
+
+while producer is None:
+    try:
+        producer = KafkaProducer(
+            bootstrap_servers=KAFKA_BROKER,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8")
+        )
+        print("✅ Connected to Kafka", flush=True)
+    except Exception as e:
+        print("⏳ Waiting for Kafka...", e, flush=True)
+        time.sleep(5)
+
+
 RESEARCH_FEEDS = [
     "https://www.sciencedaily.com/rss/computers_math/artificial_intelligence.xml",
     "https://www.sciencedaily.com/rss/computers_math/machine_learning.xml",
     "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml"
 ]
 
-producer = KafkaProducer(
-    bootstrap_servers=KAFKA_BROKER,
-    value_serializer=lambda v: json.dumps(v).encode("utf-8")
-)
-
 
 def fetch_research():
 
-    print("\n🚀 Fetching Research Feeds...")
+    print("🚀 Fetching Research...")
 
     for feed_url in RESEARCH_FEEDS:
 
-        print("Checking:", feed_url)
-
         feed = feedparser.parse(feed_url)
-
-        print("Entries found:", len(feed.entries))
 
         for entry in feed.entries[:10]:
 
@@ -40,11 +46,11 @@ def fetch_research():
                 "source": feed_url
             }
 
-            print("Sending Research:", data["title"])
+            print("Sending Research:", data["title"], flush=True)
+            producer.send(TOPIC, data)
+            producer.flush()
 
             producer.send(TOPIC, data)
-
-    producer.flush()
 
 
 def main():

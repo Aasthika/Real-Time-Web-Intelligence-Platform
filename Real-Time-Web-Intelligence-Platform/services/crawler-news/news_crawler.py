@@ -3,8 +3,31 @@ import time
 import feedparser
 from kafka import KafkaProducer
 
-KAFKA_BROKER = "localhost:9092"
+# --------------------------------
+# Kafka Connection (Retry)
+# --------------------------------
+
+KAFKA_BROKER = "kafka:9092"
 TOPIC = "news-topic"
+
+producer = None
+
+for i in range(20):
+    try:
+        producer = KafkaProducer(
+            bootstrap_servers=KAFKA_BROKER,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8")
+        )
+        print("✅ Connected to Kafka")
+        break
+    except Exception:
+        print("⏳ Waiting for Kafka...")
+        time.sleep(5)
+
+
+# --------------------------------
+# RSS Feeds
+# --------------------------------
 
 RSS_FEEDS = [
     "http://feeds.bbci.co.uk/news/rss.xml",
@@ -12,17 +35,19 @@ RSS_FEEDS = [
     "https://techcrunch.com/feed/"
 ]
 
-producer = KafkaProducer(
-    bootstrap_servers=KAFKA_BROKER,
-    value_serializer=lambda v: json.dumps(v).encode("utf-8")
-)
 
+# --------------------------------
+# Fetch News
+# --------------------------------
 
 def fetch_news():
+
     for feed_url in RSS_FEEDS:
+
         feed = feedparser.parse(feed_url)
 
         for entry in feed.entries:
+
             data = {
                 "title": entry.title,
                 "link": entry.link,
@@ -30,12 +55,19 @@ def fetch_news():
                 "source": feed_url
             }
 
-            print("Sending:", data["title"])
+            print("Sending News:", data["title"])
 
             producer.send(TOPIC, data)
 
 
+# --------------------------------
+# Main
+# --------------------------------
+
 def main():
+
+    print("🚀 News crawler started")
+
     while True:
         fetch_news()
         time.sleep(30)

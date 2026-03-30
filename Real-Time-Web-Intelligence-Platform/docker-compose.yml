@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
 
   zookeeper:
@@ -8,6 +10,7 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
     ports:
       - "2181:2181"
+
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
@@ -20,8 +23,9 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
 
   cassandra:
     image: cassandra:4.0
@@ -29,6 +33,10 @@ services:
     container_name: cassandra
     ports:
       - "9042:9042"
+    environment:
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+
 
   redis:
     image: redis:7
@@ -37,6 +45,7 @@ services:
     ports:
       - "6379:6379"
 
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
     platform: linux/amd64
@@ -44,9 +53,10 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - ES_JAVA_OPTS=-Xms256m -Xmx256m
     ports:
       - "9200:9200"
+
 
   spark-master:
     image: apache/spark:3.5.1
@@ -58,11 +68,93 @@ services:
       - "8080:8080"
       - "7077:7077"
 
+
   spark-worker:
     image: apache/spark:3.5.1
     platform: linux/amd64
     container_name: spark-worker
     depends_on:
       - spark-master
+    environment:
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=2
     command: >
-      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+      /opt/spark/bin/spark-class 
+      org.apache.spark.deploy.worker.Worker 
+      spark://spark-master:7077
+
+
+  spark:
+    build:
+      context: .
+      dockerfile: docker/spark.Dockerfile
+    container_name: spark
+    depends_on:
+      - kafka
+      - cassandra
+      - elasticsearch
+      - spark-master
+
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    container_name: api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - cassandra
+      - elasticsearch
+      - kafka
+
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/dashboard.Dockerfile
+    container_name: dashboard
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+
+
+  crawler-news:
+    build:
+      context: .
+      dockerfile: docker/crawler.Dockerfile
+    container_name: crawler-news
+    command: python services/crawler-news/news_crawler.py
+    depends_on:
+      - kafka
+
+
+  crawler-blog:
+    build:
+      context: .
+      dockerfile: docker/crawler.Dockerfile
+    container_name: crawler-blog
+    command: python services/crawler-blog/blog_crawler.py
+    depends_on:
+      - kafka
+
+
+  crawler-research:
+    build:
+      context: .
+      dockerfile: docker/crawler.Dockerfile
+    container_name: crawler-research
+    command: python services/crawler-research/research_crawler.py
+    depends_on:
+      - kafka
+
+
+  crawler-social:
+    build:
+      context: .
+      dockerfile: docker/crawler.Dockerfile
+    container_name: crawler-social
+    command: python services/crawler-social/social_simulator.py
+    depends_on:
+      - kafka

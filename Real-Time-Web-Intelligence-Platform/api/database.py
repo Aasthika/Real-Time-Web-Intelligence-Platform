@@ -7,14 +7,26 @@ import pandas as pd
 # --------------------------------
 # Cassandra Connection
 # --------------------------------
-cluster = Cluster(["localhost"])
-session = cluster.connect("realtime")
+import time
+from cassandra.cluster import Cluster
+
+session = None
+
+for i in range(20):
+    try:
+        cluster = Cluster(["cassandra"])
+        session = cluster.connect("realtime")
+        print("Connected to Cassandra")
+        break
+    except Exception as e:
+        print("Waiting for Cassandra...")
+        time.sleep(5)
 
 
 # --------------------------------
 # Elasticsearch Connection
 # --------------------------------
-es = Elasticsearch("http://localhost:9200")
+es = Elasticsearch("http://elasticsearch:9200")
 
 INDEX_NAME = "web_intelligence"
 
@@ -25,7 +37,10 @@ INDEX_NAME = "web_intelligence"
 def get_trending():
 
     rows = session.execute(
-        "SELECT word, count, score FROM trending_topics"
+        """
+        SELECT word, count, score, timestamp
+        FROM trending_topics
+        """
     )
 
     data = []
@@ -34,7 +49,8 @@ def get_trending():
         data.append({
             "word": row.word,
             "count": row.count,
-            "score": row.score
+            "score": row.score,
+            "timestamp": row.timestamp
         })
 
     df = pd.DataFrame(data)
@@ -42,10 +58,16 @@ def get_trending():
     if len(df) == 0:
         return []
 
-    df = df.sort_values("score", ascending=False)
-    df = df.drop_duplicates("word")
+    # Get latest row per word
+    df = df.sort_values("timestamp", ascending=False)
+
+    df = df.drop_duplicates(subset=["word"], keep="first")
+
+    # Sort by count
+    df = df.sort_values("count", ascending=False)
 
     return df.head(20).to_dict("records")
+ 
 
 
 # --------------------------------

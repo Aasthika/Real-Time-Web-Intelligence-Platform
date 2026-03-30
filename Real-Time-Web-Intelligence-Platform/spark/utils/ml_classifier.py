@@ -3,16 +3,30 @@ from pyspark.ml.classification import RandomForestClassifier
 from pyspark.ml import Pipeline
 from pyspark.sql.functions import col
 
+
 from cassandra.cluster import Cluster
 import uuid
 from datetime import datetime
+import time
 
 
 # --------------------------------
 # Cassandra Connection
 # --------------------------------
-cluster = Cluster(["localhost"])
-session = cluster.connect("realtime")
+import time
+from cassandra.cluster import Cluster
+
+session = None
+
+for i in range(20):
+    try:
+        cluster = Cluster(["cassandra"])
+        session = cluster.connect("realtime")
+        print("Connected to Cassandra")
+        break
+    except:
+        print("Waiting for Cassandra...")
+        time.sleep(5)
 
 
 # --------------------------------

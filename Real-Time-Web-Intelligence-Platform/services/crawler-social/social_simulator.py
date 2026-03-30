@@ -4,13 +4,24 @@ import random
 from datetime import datetime
 from kafka import KafkaProducer
 
-KAFKA_BROKER = "localhost:9092"
+
+KAFKA_BROKER = "kafka:9092"
 TOPIC = "social-topic"
 
-producer = KafkaProducer(
-    bootstrap_servers=KAFKA_BROKER,
-    value_serializer=lambda v: json.dumps(v).encode("utf-8")
-)
+
+producer = None
+
+while producer is None:
+    try:
+        producer = KafkaProducer(
+            bootstrap_servers=KAFKA_BROKER,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8")
+        )
+        print("✅ Connected to Kafka", flush=True)
+    except Exception as e:
+        print("⏳ Waiting for Kafka...", e)
+        time.sleep(5)
+
 
 users = [
     "data_scientist",
@@ -20,6 +31,7 @@ users = [
     "cloud_engineer",
     "analytics_pro"
 ]
+
 
 posts = [
     "AI is transforming healthcare",
@@ -33,18 +45,23 @@ posts = [
 
 
 def generate_post():
+
     data = {
         "user": random.choice(users),
         "post": random.choice(posts),
         "timestamp": datetime.now().isoformat()
     }
 
-    print("Sending Social:", data["post"])
+    print("Sending Social:", data["post"], flush=True)
 
     producer.send(TOPIC, data)
+    producer.flush()
 
 
 def main():
+
+    print("🚀 Social crawler started", flush=True)
+
     while True:
         generate_post()
         time.sleep(2)

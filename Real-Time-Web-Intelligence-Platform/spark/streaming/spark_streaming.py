@@ -31,13 +31,16 @@ from spark.utils.elasticsearch_writer import write_to_elasticsearch
 # --------------------------------
 spark = SparkSession.builder \
     .appName("RealTimeWebIntelligence") \
-    .config(
-        "spark.jars.packages",
-        "org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1"
-    ) \
+    .config("spark.jars.packages",
+            "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1") \
+    .config("spark.sql.streaming.checkpointLocation",
+            "/tmp/checkpoint") \
     .getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")
+
+# SPEED FIX
+spark.conf.set("spark.sql.shuffle.partitions", "4")
 # --------------------------------
 # Load ML Model
 # --------------------------------
@@ -62,7 +65,7 @@ schema = StructType([
 # --------------------------------
 df = spark.readStream \
     .format("kafka") \
-    .option("kafka.bootstrap.servers", "localhost:9092") \
+    .option("kafka.bootstrap.servers", "kafka:9092") \
     .option("subscribe", "news-topic,blog-topic,research-topic,social-topic") \
     .option("startingOffsets", "latest") \
     .load()
@@ -153,7 +156,7 @@ def process_batch(batch_df, batch_id):
     # -----------------------------
     # Write Trending to Cassandra
     # -----------------------------
-    rows = classified.collect()
+    rows = classified.limit(50).collect()
 
     for row in rows:
 
@@ -211,6 +214,7 @@ def process_batch(batch_df, batch_id):
 query = text_df.writeStream \
     .foreachBatch(process_batch) \
     .outputMode("append") \
+    .trigger(processingTime="5 seconds") \
     .start()
 
 
