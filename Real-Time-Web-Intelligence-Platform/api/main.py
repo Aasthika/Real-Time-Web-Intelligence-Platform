@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from api.database import (
     get_trending,
     search_query,
-    analytics
+    analytics,
+    add_alert
 )
 
 from api.models import SearchRequest, AlertRequest
@@ -12,6 +13,16 @@ app = FastAPI(
     title="Real Time Web Intelligence API",
     version="1.0"
 )
+
+
+# --------------------------------
+# Health API (Important for Render)
+# --------------------------------
+@app.get("/health")
+def health():
+    return {
+        "status": "ok"
+    }
 
 
 # --------------------------------
@@ -36,38 +47,52 @@ def search(data: SearchRequest):
             "message": str(e)
         }
 
+
 # --------------------------------
 # Trending API
 # --------------------------------
 @app.get("/trending")
 def trending():
 
-    results = get_trending()
+    try:
 
-    return {
-        "status": "success",
-        "trending": results
-    }
+        results = get_trending()
+
+        return {
+            "status": "success",
+            "trending": results
+        }
+
+    except Exception as e:
+
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 
 # --------------------------------
 # Alerts API
 # --------------------------------
-alerts = []
-
-
-from api.database import add_alert
-
-
 @app.post("/alerts")
 def create_alert(data: AlertRequest):
 
-    add_alert(data.keyword)
+    try:
 
-    return {
-        "status": "alert added",
-        "keyword": data.keyword
-    }
+        add_alert(data.keyword)
+
+        return {
+            "status": "alert added",
+            "keyword": data.keyword
+        }
+
+    except Exception as e:
+
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
 
 # --------------------------------
 # Analytics API
@@ -75,9 +100,18 @@ def create_alert(data: AlertRequest):
 @app.get("/analytics")
 def get_analytics():
 
-    stats = analytics()
+    try:
 
-    return {
-        "status": "success",
-        "analytics": stats
-    }
+        stats = analytics()
+
+        return {
+            "status": "success",
+            "analytics": stats
+        }
+
+    except Exception as e:
+
+        return {
+            "status": "error",
+            "message": str(e)
+        }
