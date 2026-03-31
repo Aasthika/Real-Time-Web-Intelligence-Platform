@@ -1,13 +1,5 @@
 from fastapi import FastAPI
-from api.database import (
-    get_trending,
-    search_query,
-    analytics,
-    add_alert
-)
-
 from api.models import SearchRequest, AlertRequest
-
 
 app = FastAPI(
     title="Real Time Web Intelligence API",
@@ -16,7 +8,7 @@ app = FastAPI(
 
 
 # --------------------------------
-# Health API (Important for Render)
+# Health API
 # --------------------------------
 @app.get("/health")
 def health():
@@ -32,6 +24,7 @@ def health():
 def search(data: SearchRequest):
 
     try:
+        from api.database import search_query
 
         results = search_query(data.query)
 
@@ -55,6 +48,7 @@ def search(data: SearchRequest):
 def trending():
 
     try:
+        from api.database import get_trending
 
         results = get_trending()
 
@@ -78,6 +72,7 @@ def trending():
 def create_alert(data: AlertRequest):
 
     try:
+        from api.database import add_alert
 
         add_alert(data.keyword)
 
@@ -101,6 +96,7 @@ def create_alert(data: AlertRequest):
 def get_analytics():
 
     try:
+        from api.database import analytics
 
         stats = analytics()
 
