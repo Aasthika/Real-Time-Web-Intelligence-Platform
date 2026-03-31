@@ -5,21 +5,22 @@ import pandas as pd
 
 
 # --------------------------------
-# Cassandra Connection
+# Cassandra Connection (Robust)
 # --------------------------------
 import time
 from cassandra.cluster import Cluster
 
 session = None
 
-for i in range(20):
+print("Connecting to Cassandra...")
+
+while session is None:
     try:
         cluster = Cluster(["cassandra"])
         session = cluster.connect("realtime")
-        print("Connected to Cassandra")
-        break
+        print("✅ Connected to Cassandra")
     except Exception as e:
-        print("Waiting for Cassandra...")
+        print("⏳ Waiting for Cassandra...")
         time.sleep(5)
 
 

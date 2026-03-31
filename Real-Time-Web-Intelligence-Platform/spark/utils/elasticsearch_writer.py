@@ -27,9 +27,10 @@ def write_to_elasticsearch(word, count, score, category):
         }
 
         es.index(
-            index=INDEX_NAME,
-            document=doc
-        )
+        index=INDEX_NAME,
+        id=word,   # 🔥 important
+        document=doc
+    )
 
     except Exception as e:
         print("Elasticsearch Write Error:", e)

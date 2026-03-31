@@ -7,8 +7,6 @@ from spark.utils.stopwords import remove_stopwords
 from spark.utils.tfidf import apply_tfidf
 from spark.utils.trending import detect_trending
 
-from spark.utils.cassandra_writer import write_metadata, write_trending
-
 from spark.utils.ranking import (
     apply_recency_ranking,
     apply_popularity_ranking,
@@ -26,25 +24,37 @@ from spark.utils.cassandra_writer import (
 
 from spark.utils.elasticsearch_writer import write_to_elasticsearch
 
+
 # --------------------------------
 # Spark Session
 # --------------------------------
 spark = SparkSession.builder \
     .appName("RealTimeWebIntelligence") \
-    .config("spark.jars.packages",
-            "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1") \
-    .config("spark.sql.streaming.checkpointLocation",
-            "/tmp/checkpoint") \
+    .config(
+        "spark.jars.packages",
+        "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1"
+    ) \
+    .config(
+        "spark.sql.streaming.checkpointLocation",
+        "/tmp/checkpoint"
+    ) \
     .getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")
 
-# SPEED FIX
-spark.conf.set("spark.sql.shuffle.partitions", "4")
+# --------------------------------
+# Performance Optimization
+# --------------------------------
+spark.conf.set("spark.sql.shuffle.partitions", "2")
+spark.conf.set("spark.executor.memory", "512m")
+spark.conf.set("spark.driver.memory", "512m")
+
+
 # --------------------------------
 # Load ML Model
 # --------------------------------
 model = train_model(spark)
+
 
 # --------------------------------
 # Schema
@@ -66,7 +76,10 @@ schema = StructType([
 df = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "kafka:9092") \
-    .option("subscribe", "news-topic,blog-topic,research-topic,social-topic") \
+    .option(
+        "subscribe",
+        "news-topic,blog-topic,research-topic,social-topic"
+    ) \
     .option("startingOffsets", "latest") \
     .load()
 
@@ -98,33 +111,35 @@ def process_batch(batch_df, batch_id):
     print(f"\n🚀 Processing batch {batch_id}")
 
     # Skip empty batch
-    if batch_df.rdd.isEmpty():    
+    if batch_df.rdd.isEmpty():
         print("Empty batch — skipping")
         return
 
-    # -----------------------------
+
+    # --------------------------------
     # Text Processing
-    # -----------------------------
+    # --------------------------------
     cleaned = clean_text(batch_df, "text")
 
     tokenized = tokenize(cleaned)
 
     filtered = remove_stopwords(tokenized)
 
-    if filtered.count() == 0:
+    # Memory-safe empty check
+    if filtered.rdd.isEmpty():
         print("No tokens — skipping")
         return
 
 
-    # -----------------------------
+    # --------------------------------
     # TF-IDF
-    # -----------------------------
+    # --------------------------------
     tfidf = apply_tfidf(filtered)
 
 
-    # -----------------------------
+    # --------------------------------
     # Trending Detection
-    # -----------------------------
+    # --------------------------------
     trending = detect_trending(filtered)
 
     trending = trending.filter(
@@ -133,29 +148,32 @@ def process_batch(batch_df, batch_id):
     )
 
 
-    # -----------------------------
+    # --------------------------------
     # Ranking System
-    # -----------------------------
+    # --------------------------------
     ranked = apply_popularity_ranking(trending)
 
     ranked = apply_recency_ranking(ranked)
 
     ranked = combine_ranking(ranked)
 
-    ranked = ranked.orderBy("final_score", ascending=False)
+    ranked = ranked.orderBy(
+        "final_score",
+        ascending=False
+    )
 
-    # -----------------------------
+
+    # --------------------------------
     # Classification
-    # -----------------------------
+    # --------------------------------
     classified = classify(ranked, model)
 
-    # Show classified output
-    classified.show(truncate=False)
+    print("✅ Classification completed")
 
 
-    # -----------------------------
-    # Write Trending to Cassandra
-    # -----------------------------
+    # --------------------------------
+    # Write Trending to Cassandra + Elasticsearch
+    # --------------------------------
     rows = classified.limit(50).collect()
 
     for row in rows:
@@ -178,35 +196,54 @@ def process_batch(batch_df, batch_id):
                 row["category"]
             )
 
+            print(f"🔥 Written: {row['word']} → {row['count']}")
+
         except Exception as e:
             print("Write Error:", e)
 
 
-    # -----------------------------
+    # --------------------------------
     # Write Metadata
-    # -----------------------------
-    meta_rows = batch_df.collect()
+    # --------------------------------
+    meta_rows = batch_df.limit(100).collect()
 
     for row in meta_rows:
+
         try:
+
             write_metadata(
                 row["title"],
                 row["source"],
                 row["published"],
                 row["timestamp"]
             )
+
         except Exception as e:
             print("Metadata Write Error:", e)
-    # -----------------------------
+
+
+    # --------------------------------
     # Alert Detection
-    # -----------------------------
+    # --------------------------------
     alerts = get_alerts()
 
-    alert_words = classified.select("word").collect()
+    alert_words = classified \
+        .select("word") \
+        .limit(50) \
+        .collect()
 
     for row in alert_words:
+
         if row["word"] in alerts:
-            write_triggered_alert(row["word"])
+
+            write_triggered_alert(
+                row["word"]
+            )
+
+            print(
+                f"🚨 ALERT TRIGGERED: {row['word']}"
+            )
+
 
 # --------------------------------
 # Streaming Query
@@ -214,7 +251,7 @@ def process_batch(batch_df, batch_id):
 query = text_df.writeStream \
     .foreachBatch(process_batch) \
     .outputMode("append") \
-    .trigger(processingTime="5 seconds") \
+    .trigger(processingTime="8 seconds") \
     .start()
 
 

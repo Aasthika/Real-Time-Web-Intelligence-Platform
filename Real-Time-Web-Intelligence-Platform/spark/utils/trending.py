@@ -7,7 +7,6 @@ def detect_trending(df):
         explode(col("filtered_words")).alias("word")
     )
 
-    trending = words.groupBy("word").count() \
-        .orderBy("count", ascending=False)
+    trending = words.groupBy("word").count()
 
     return trending

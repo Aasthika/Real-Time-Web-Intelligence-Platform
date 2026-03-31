@@ -261,10 +261,18 @@ elif menu == "Monitoring":
 
         if len(trending_df) > 0:
 
-            trend_df = trending_df.head(10)[["word","count"]]
+            # Sort by latest timestamp
+            trending_df["timestamp"] = pd.to_datetime(trending_df["timestamp"])
+
+            trend_df = trending_df.sort_values(
+                "timestamp",
+                ascending=True
+            ).tail(10)
+
+            trend_df = trend_df.set_index("timestamp")
 
             st.line_chart(
-                trend_df.set_index("word")
+                trend_df["count"]
             )
 
         st.subheader("📊 Topic Distribution")
