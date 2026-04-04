@@ -4,7 +4,8 @@ WORKDIR /app
 
 COPY . /app
 
-RUN pip install --no-cache-dir \
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
     streamlit \
     pandas \
     requests \
