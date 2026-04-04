@@ -7,8 +7,4 @@ feedparser
 pandas
 streamlit
 streamlit-autorefresh
-requestsCREATE KEYSPACE realtime
-WITH replication = {
-'class': 'SimpleStrategy',
-'replication_factor': 1
-};
+requests
