@@ -50,6 +50,7 @@ def fetch_research():
             producer.send(TOPIC, data)
             producer.flush()
 
+            producer.send(TOPIC, data)
 
 
 def main():

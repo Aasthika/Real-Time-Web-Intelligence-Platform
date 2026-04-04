@@ -1,20 +1,17 @@
 from fastapi import FastAPI
+from api.database import (
+    get_trending,
+    search_query,
+    analytics
+)
+
 from api.models import SearchRequest, AlertRequest
+
 
 app = FastAPI(
     title="Real Time Web Intelligence API",
     version="1.0"
 )
-
-
-# --------------------------------
-# Health API
-# --------------------------------
-@app.get("/health")
-def health():
-    return {
-        "status": "ok"
-    }
 
 
 # --------------------------------
@@ -24,7 +21,6 @@ def health():
 def search(data: SearchRequest):
 
     try:
-        from api.database import search_query
 
         results = search_query(data.query)
 
@@ -40,54 +36,38 @@ def search(data: SearchRequest):
             "message": str(e)
         }
 
-
 # --------------------------------
 # Trending API
 # --------------------------------
 @app.get("/trending")
 def trending():
 
-    try:
-        from api.database import get_trending
+    results = get_trending()
 
-        results = get_trending()
-
-        return {
-            "status": "success",
-            "trending": results
-        }
-
-    except Exception as e:
-
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+    return {
+        "status": "success",
+        "trending": results
+    }
 
 
 # --------------------------------
 # Alerts API
 # --------------------------------
+alerts = []
+
+
+from api.database import add_alert
+
+
 @app.post("/alerts")
 def create_alert(data: AlertRequest):
 
-    try:
-        from api.database import add_alert
+    add_alert(data.keyword)
 
-        add_alert(data.keyword)
-
-        return {
-            "status": "alert added",
-            "keyword": data.keyword
-        }
-
-    except Exception as e:
-
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-
+    return {
+        "status": "alert added",
+        "keyword": data.keyword
+    }
 
 # --------------------------------
 # Analytics API
@@ -95,19 +75,9 @@ def create_alert(data: AlertRequest):
 @app.get("/analytics")
 def get_analytics():
 
-    try:
-        from api.database import analytics
+    stats = analytics()
 
-        stats = analytics()
-
-        return {
-            "status": "success",
-            "analytics": stats
-        }
-
-    except Exception as e:
-
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+    return {
+        "status": "success",
+        "analytics": stats
+    }
