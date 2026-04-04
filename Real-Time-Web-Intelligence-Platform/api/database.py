@@ -2,30 +2,40 @@ from cassandra.cluster import Cluster
 from datetime import datetime
 from elasticsearch import Elasticsearch
 import pandas as pd
-
-
-# --------------------------------
-# Cassandra Connection (Robust)
-# --------------------------------
 import time
-from cassandra.cluster import Cluster
+
+
+# --------------------------------
+# Lazy Cassandra Connection
+# --------------------------------
+session = None
+
 
 session = None
 
-print("Connecting to Cassandra...")
+def get_session():
 
-while session is None:
-    try:
-        cluster = Cluster(["cassandra"])
-        session = cluster.connect("realtime")
-        print("✅ Connected to Cassandra")
-    except Exception as e:
-        print("⏳ Waiting for Cassandra...")
-        time.sleep(5)
+    global session
 
+    if session is None:
+
+        print("Connecting to Cassandra...")
+
+        while True:
+            try:
+                cluster = Cluster(["cassandra"])
+                session = cluster.connect("realtime")
+                print("✅ Cassandra Connected")
+                break
+
+            except Exception as e:
+                print("⏳ Waiting for Cassandra...", e)
+                time.sleep(5)
+
+    return session
 
 # --------------------------------
-# Elasticsearch Connection
+# Elasticsearch
 # --------------------------------
 es = Elasticsearch("http://elasticsearch:9200")
 
@@ -33,16 +43,19 @@ INDEX_NAME = "web_intelligence"
 
 
 # --------------------------------
-# Trending (From Cassandra)
+# Trending
 # --------------------------------
 def get_trending():
 
+    session = get_session()
+
     rows = session.execute(
-        """
-        SELECT word, count, score, timestamp
-        FROM trending_topics
-        """
-    )
+    """
+    SELECT word, count, score, timestamp
+    FROM trending_topics
+    ALLOW FILTERING
+    """
+)
 
     data = []
 
@@ -59,20 +72,17 @@ def get_trending():
     if len(df) == 0:
         return []
 
-    # Get latest row per word
     df = df.sort_values("timestamp", ascending=False)
 
     df = df.drop_duplicates(subset=["word"], keep="first")
 
-    # Sort by count
     df = df.sort_values("count", ascending=False)
 
     return df.head(20).to_dict("records")
- 
 
 
 # --------------------------------
-# Search (From Elasticsearch)
+# Search
 # --------------------------------
 def search_query(keyword):
 
@@ -82,11 +92,7 @@ def search_query(keyword):
             "match": {
                 "word": keyword
             }
-        },
-        "sort": [
-            {"score": {"order": "desc"}},
-            {"timestamp": {"order": "desc"}}
-        ]
+        }
     }
 
     res = es.search(
@@ -113,9 +119,11 @@ def search_query(keyword):
 # --------------------------------
 def analytics():
 
-    query = "SELECT COUNT(*) FROM trending_topics"
+    session = get_session()
 
-    rows = session.execute(query)
+    rows = session.execute(
+        "SELECT COUNT(*) FROM trending_topics"
+    )
 
     for row in rows:
         return {
@@ -124,9 +132,11 @@ def analytics():
 
 
 # --------------------------------
-# Add Alert
+# Alerts
 # --------------------------------
 def add_alert(keyword):
+
+    session = get_session()
 
     session.execute(
         """

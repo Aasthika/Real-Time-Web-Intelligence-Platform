@@ -1,53 +1,56 @@
 from cassandra.cluster import Cluster
-import uuid
 from datetime import datetime
-
-
 import time
-from cassandra.cluster import Cluster
+
 
 session = None
 
-for i in range(20):
-    try:
-        cluster = Cluster(["cassandra"])
-        session = cluster.connect("realtime")
-        print("Connected to Cassandra")
-        break
-    except:
-        print("Waiting for Cassandra...")
-        time.sleep(5)
+
+# --------------------------------
+# Cassandra Connection
+# --------------------------------
+def get_session():
+
+    global session
+
+    if session is None:
+
+        print("Connecting Spark to Cassandra...")
+
+        while True:
+            try:
+                cluster = Cluster(["cassandra"])
+                session = cluster.connect("realtime")
+                print("✅ Spark Connected to Cassandra")
+                break
+
+            except Exception as e:
+                print("⏳ Spark waiting for Cassandra...")
+                time.sleep(5)
+
+    return session
 
 
 # --------------------------------
 # Write Trending
 # --------------------------------
-def write_trending(word, count, score, category="general"):
+def write_trending(word, count, score, category):
 
-    if word is None:
-        return
+    session = get_session()
 
-    try:
-
-        session.execute(
-            """
-            INSERT INTO trending_topics
-            (word, timestamp, count, score, category)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (
-                str(word),
-                datetime.utcnow(),
-                int(count),
-                float(score),
-                str(category)
-            )
+    session.execute(
+        """
+        INSERT INTO trending_topics
+        (word, timestamp, count, score, category)
+        VALUES (%s, toTimestamp(now()), %s, %s, %s)
+        """,
+        (
+            word,
+            int(count),
+            float(score),
+            category
         )
-
-        print(f"🔥 Written: {word} → {count}")
-
-    except Exception as e:
-        print("❌ Cassandra Write Error:", e)
+    )
 
 
 # --------------------------------
@@ -55,53 +58,35 @@ def write_trending(word, count, score, category="general"):
 # --------------------------------
 def write_metadata(title, source, published, timestamp):
 
-    if title is None:
-        return
+    session = get_session()
 
     session.execute(
         """
-        INSERT INTO page_metadata
+        INSERT INTO metadata
         (id, title, source, published, timestamp)
-        VALUES (%s, %s, %s, %s, %s)
+        VALUES (uuid(), %s, %s, %s, %s)
         """,
         (
-            uuid.uuid4(),
-            str(title),
-            str(source),
-            str(published),
-            datetime.utcnow()
+            title,
+            source,
+            published,
+            timestamp
         )
     )
 
-# --------------------------------
-# Add Alert
-# --------------------------------
-def add_alert(keyword):
-
-    session.execute(
-        """
-        INSERT INTO user_alerts (keyword, created_at)
-        VALUES (%s, toTimestamp(now()))
-        """,
-        (keyword,)
-    )
-
 
 # --------------------------------
-# Get Alerts
+# Alerts
 # --------------------------------
 def get_alerts():
+
+    session = get_session()
 
     rows = session.execute(
         "SELECT keyword FROM user_alerts"
     )
 
-    alerts = []
-
-    for row in rows:
-        alerts.append(row.keyword)
-
-    return alerts
+    return [row.keyword for row in rows]
 
 
 # --------------------------------
@@ -109,4 +94,13 @@ def get_alerts():
 # --------------------------------
 def write_triggered_alert(word):
 
-    print(f"\n🚨 ALERT TRIGGERED: {word}")
+    session = get_session()
+
+    session.execute(
+        """
+        INSERT INTO triggered_alerts
+        (word, timestamp)
+        VALUES (%s, toTimestamp(now()))
+        """,
+        (word,)
+    )

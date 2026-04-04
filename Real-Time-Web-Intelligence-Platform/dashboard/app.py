@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import time
 from streamlit_autorefresh import st_autorefresh
-API_URL = "http://api:8000"
+API_URL = "http://localhost:8000"
 
 st.set_page_config(
     page_title="Real Time Web Intelligence",
@@ -43,9 +43,11 @@ if menu == "Trending":
 
         data = response.json()
 
-        df = pd.DataFrame(
-            data["trending"]
-        )
+        if data["status"] == "success":
+            df = pd.DataFrame(data["trending"])
+        else:
+            st.error(data["message"])
+            df = pd.DataFrame()
 
         col1, col2 = st.columns([2,1])
 

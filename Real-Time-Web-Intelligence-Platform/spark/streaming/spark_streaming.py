@@ -26,7 +26,7 @@ from spark.utils.elasticsearch_writer import write_to_elasticsearch
 
 
 # --------------------------------
-# Spark Session
+# Spark Session (Fixed)
 # --------------------------------
 spark = SparkSession.builder \
     .appName("RealTimeWebIntelligence") \
@@ -38,22 +38,22 @@ spark = SparkSession.builder \
         "spark.sql.streaming.checkpointLocation",
         "/tmp/checkpoint"
     ) \
+    .config("spark.sql.shuffle.partitions", "2") \
+    .config("spark.executor.memory", "512m") \
+    .config("spark.driver.memory", "512m") \
     .getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")
 
-# --------------------------------
-# Performance Optimization
-# --------------------------------
-spark.conf.set("spark.sql.shuffle.partitions", "2")
-spark.conf.set("spark.executor.memory", "512m")
-spark.conf.set("spark.driver.memory", "512m")
+print("🚀 Spark Session Started")
 
 
 # --------------------------------
 # Load ML Model
 # --------------------------------
+print("Loading ML Model...")
 model = train_model(spark)
+print("✅ ML Model Loaded")
 
 
 # --------------------------------
@@ -73,6 +73,8 @@ schema = StructType([
 # --------------------------------
 # Kafka Stream
 # --------------------------------
+print("Connecting to Kafka...")
+
 df = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "kafka:9092") \
@@ -82,6 +84,8 @@ df = spark.readStream \
     ) \
     .option("startingOffsets", "latest") \
     .load()
+
+print("✅ Kafka Connected")
 
 
 json_df = df.selectExpr(
@@ -125,7 +129,6 @@ def process_batch(batch_df, batch_id):
 
     filtered = remove_stopwords(tokenized)
 
-    # Memory-safe empty check
     if filtered.rdd.isEmpty():
         print("No tokens — skipping")
         return
@@ -149,7 +152,7 @@ def process_batch(batch_df, batch_id):
 
 
     # --------------------------------
-    # Ranking System
+    # Ranking
     # --------------------------------
     ranked = apply_popularity_ranking(trending)
 
@@ -172,15 +175,16 @@ def process_batch(batch_df, batch_id):
 
 
     # --------------------------------
-    # Write Trending to Cassandra + Elasticsearch
+    # Write Trending
     # --------------------------------
     rows = classified.limit(50).collect()
+
+    print(f"Writing {len(rows)} trending words...")
 
     for row in rows:
 
         try:
 
-            # Cassandra
             write_trending(
                 row["word"],
                 row["count"],
@@ -188,7 +192,6 @@ def process_batch(batch_df, batch_id):
                 row["category"]
             )
 
-            # Elasticsearch
             write_to_elasticsearch(
                 row["word"],
                 row["count"],
@@ -248,11 +251,15 @@ def process_batch(batch_df, batch_id):
 # --------------------------------
 # Streaming Query
 # --------------------------------
+print("🚀 Starting Streaming Query...")
+
 query = text_df.writeStream \
     .foreachBatch(process_batch) \
     .outputMode("append") \
     .trigger(processingTime="8 seconds") \
     .start()
 
+
+print("✅ Streaming Started")
 
 query.awaitTermination()

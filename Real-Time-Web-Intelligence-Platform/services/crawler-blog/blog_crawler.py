@@ -46,7 +46,6 @@ def fetch_blogs():
             producer.send(TOPIC, data)
             producer.flush()
 
-            producer.send(TOPIC, data)
 
 
 def main():
