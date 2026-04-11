@@ -1,0 +1,68 @@
+# eclipse-temurin:17-jre-jammy = Java 17 on Ubuntu 22.04 — reliable apt, works on M4 Mac
+FROM eclipse-temurin:17-jre-jammy
+
+WORKDIR /app
+
+# Install Python + tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip wget curl netcat-openbsd procps \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3 /usr/bin/python
+
+# ── Install PySpark via pip (much faster than downloading tar.gz) ────────────
+# pip's pyspark wheel includes Spark binaries — no separate wget needed
+RUN pip3 install --no-cache-dir \
+    pyspark==3.5.1 \
+    kafka-python==2.0.2 \
+    cassandra-driver==3.29.1 \
+    "elasticsearch>=7.17.0,<8.0.0" \
+    pandas==2.2.2 \
+    numpy==1.26.4
+
+# Set Spark paths (pip-installed pyspark puts Spark here)
+RUN SPARK_HOME=$(python3 -c "import pyspark; import os; print(os.path.dirname(pyspark.__file__))") && \
+    echo "export SPARK_HOME=$SPARK_HOME" >> /etc/environment && \
+    echo "SPARK_HOME=$SPARK_HOME" >> /etc/environment
+
+ENV SPARK_HOME=/usr/local/lib/python3.10/dist-packages/pyspark
+ENV PATH=$SPARK_HOME/bin:$PATH
+ENV PYSPARK_PYTHON=python3
+
+# ── Download connector JARs into Spark's jars folder ────────────────────────
+RUN pip3 show pyspark | grep Location | awk '{print $2"/pyspark/jars"}' > /tmp/jars_path.txt && \
+    JARS_DIR=$(cat /tmp/jars_path.txt) && \
+    mkdir -p $JARS_DIR && \
+    wget -q -P $JARS_DIR \
+        "https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.12/3.5.1/spark-sql-kafka-0-10_2.12-3.5.1.jar" \
+        "https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0-10_2.12/3.5.1/spark-token-provider-kafka-0-10_2.12-3.5.1.jar" \
+        "https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.4.1/kafka-clients-3.4.1.jar" \
+        "https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar" \
+        "https://repo1.maven.org/maven2/com/datastax/spark/spark-cassandra-connector-assembly_2.12/3.5.0/spark-cassandra-connector-assembly_2.12-3.5.0.jar" \
+        "https://repo1.maven.org/maven2/org/elasticsearch/elasticsearch-spark-30_2.12/7.17.10/elasticsearch-spark-30_2.12-7.17.10.jar"
+
+# Copy spark code
+COPY spark/ ./spark/
+RUN find ./spark -type d -exec touch {}/__init__.py \;
+RUN mkdir -p /tmp/spark-checkpoints/realtime && chmod -R 777 /tmp/spark-checkpoints
+
+ENV PYTHONPATH=/app
+ENV KAFKA_BROKER=kafka:29092
+ENV CASSANDRA_HOST=cassandra
+ENV ES_HOST=elasticsearch
+
+CMD ["/bin/bash", "-c", "\
+    until nc -z cassandra 9042;     do echo 'waiting cassandra...'; sleep 3; done && \
+    until nc -z kafka 29092;        do echo 'waiting kafka...';     sleep 3; done && \
+    until nc -z elasticsearch 9200; do echo 'waiting ES...';        sleep 3; done && \
+    sleep 10 && \
+    spark-submit \
+        --master local[2] \
+        --driver-memory 1g \
+        --conf spark.driver.host=spark-streaming-job \
+        --conf spark.driver.bindAddress=0.0.0.0 \
+        --conf spark.cassandra.connection.host=cassandra \
+        --conf spark.es.nodes=elasticsearch \
+        --conf spark.es.port=9200 \
+        --conf spark.es.nodes.wan.only=true \
+        /app/spark/streaming/spark_streaming.py \
+"]

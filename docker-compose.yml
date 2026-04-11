@@ -1,0 +1,245 @@
+networks:
+  intelligence-net:
+    driver: bridge
+
+volumes:
+  cassandra-data:
+  es-data:
+
+
+services:
+
+  # ── INFRASTRUCTURE ──────────────────────────────────────────────────────────
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    platform: linux/amd64
+    container_name: zookeeper
+    networks: [ intelligence-net ]
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "echo ruok | nc localhost 2181" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    platform: linux/amd64
+    container_name: kafka
+    networks: [ intelligence-net ]
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092" # for tools running on your Mac (localhost)
+      - "29092:29092" # for container-to-container traffic
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:29092" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  cassandra:
+    image: cassandra:4.0
+    platform: linux/amd64
+    container_name: cassandra
+    networks: [ intelligence-net ]
+    ports:
+      - "9042:9042"
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+    environment:
+      CASSANDRA_CLUSTER_NAME: "RealtimeCluster"
+      HEAP_NEWSIZE: 128M
+      MAX_HEAP_SIZE: 512M
+    healthcheck:
+      test: [ "CMD", "cqlsh", "-e", "describe keyspaces" ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.10
+    container_name: elasticsearch
+    networks: [ intelligence-net ]
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9200/_cluster/health" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7
+    platform: linux/amd64
+    container_name: redis
+    networks: [ intelligence-net ]
+    ports:
+      - "6379:6379"
+
+  # ── SPARK ───────────────────────────────────────────────────────────────────
+
+  spark-master:
+    image: apache/spark:3.5.1
+    platform: linux/amd64
+    container_name: spark-master
+    networks: [ intelligence-net ]
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    environment:
+      SPARK_MODE: master
+
+  spark-worker:
+    image: apache/spark:3.5.1
+    platform: linux/amd64
+    container_name: spark-worker
+    networks: [ intelligence-net ]
+    depends_on:
+      - spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: 2G
+      SPARK_WORKER_CORES: 2
+
+  # ── CRAWLERS ────────────────────────────────────────────────────────────────
+  # Each crawler is a tiny image — just Python + kafka-python + feedparser
+
+  crawler-news:
+    build:
+      context: .
+      dockerfile: services/crawler-news/Dockerfile
+    container_name: crawler-news
+    networks: [ intelligence-net ]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      - KAFKA_BROKER=kafka:29092
+      - PYTHONPATH=/app:/app/spark
+    restart: unless-stopped
+
+  crawler-blog:
+    build:
+      context: .
+      dockerfile: services/crawler-blog/Dockerfile
+    container_name: crawler-blog
+    networks: [ intelligence-net ]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      - KAFKA_BROKER=kafka:29092
+      - PYTHONPATH=/app:/app/spark
+    restart: unless-stopped
+
+  crawler-research:
+    build:
+      context: .
+      dockerfile: services/crawler-research/Dockerfile
+    container_name: crawler-research
+    networks: [ intelligence-net ]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      - KAFKA_BROKER=kafka:29092
+      - PYTHONPATH=/app:/app/spark
+    restart: unless-stopped
+
+  social-simulator:
+    build:
+      context: .
+      dockerfile: services/crawler-social/Dockerfile
+    container_name: social-simulator
+    networks: [ intelligence-net ]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      - KAFKA_BROKER=kafka:29092
+      - PYTHONPATH=/app:/app/spark
+    restart: unless-stopped
+
+  # ── SPARK STREAMING JOB ─────────────────────────────────────────────────────
+
+  spark-streaming-job:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.processor
+    container_name: spark-streaming-job
+    networks: [ intelligence-net ]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      cassandra:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER: kafka:29092
+      CASSANDRA_HOST: cassandra
+      ES_HOST: elasticsearch
+    restart: on-failure
+
+  # ── APPLICATION ─────────────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: flask-api
+    networks: [ intelligence-net ]
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      CASSANDRA_HOST: cassandra
+      ES_HOST: http://elasticsearch:9200
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    container_name: streamlit-dashboard
+    networks: [ intelligence-net ]
+    depends_on:
+      - api
+    ports:
+      - "8505:8501"
+    environment:
+      API_URL: http://api:8000
+    restart: unless-stopped
