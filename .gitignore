@@ -1,0 +1,66 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual Environment ───────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── Environment Variables (NEVER commit secrets) ──────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+
+# ── Jupyter Notebooks ─────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Spark ─────────────────────────────────────────────────────────────────────
+spark-checkpoints/
+/tmp/spark-checkpoints/
+spark/models/category_classifier/
+derby.log
+metastore_db/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+app_debug.log
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+.dockerignore
+
+# ── Data & Checkpoints ────────────────────────────────────────────────────────
+data/
+*.csv
+*.json.gz
+*.parquet
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
