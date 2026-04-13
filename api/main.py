@@ -26,12 +26,16 @@ es = Elasticsearch([ES_HOST])
 
 cassandra_session = None
 import time
-for attempt in range(5):
+import sys
+
+# In cloud environments with swap, Cassandra is extremely slow to initialize.
+# We will wait and retry until it succeeds.
+for attempt in range(100):
    try:
-       cluster = Cluster([CASSANDRA_HOST])
+       cluster = Cluster([CASSANDRA_HOST], control_connection_timeout=120.0, connect_timeout=120.0)
        # Connect without keyspace first
        cassandra_session = cluster.connect()
-       cassandra_session.default_timeout = 120.0
+       cassandra_session.default_timeout = 300.0
        
        # Initialize keyspace
        cassandra_session.execute("""
@@ -101,7 +105,10 @@ for attempt in range(5):
        break
    except Exception as e:
        print(f"❌ Cassandra Connection Error (Attempt {attempt+1}): {e}")
-       time.sleep(5)
+       time.sleep(15)
+else:
+   print("🚨 Could not connect to Cassandra after 100 attempts. Exiting.")
+   sys.exit(1)
 
 
 def _cassandra_ready():
@@ -311,6 +318,7 @@ def mix_api():
        rows = cassandra_session.execute(query)
        return jsonify([{"category": r.get('category'), "count": r.get('count')} for r in rows])
    except Exception as e:
+       print("Mix Error:", e)
        return jsonify([])
 
 
@@ -321,7 +329,8 @@ def analytics_api():
    try:
        row = cassandra_session.execute("SELECT count(*) AS total FROM page_metadata").one()
        return jsonify({"total_articles_indexed": row['total'] if row else 0})
-   except:
+   except Exception as e:
+       print("Analytics Error:", e)
        return jsonify({"total_articles_indexed": 0})
 
 
@@ -334,7 +343,8 @@ def notifications_api():
            "SELECT user_id, topic, match_text, link, triggered_at FROM triggered_alerts LIMIT 5"
        )
        return jsonify(list(rows))
-   except:
+   except Exception as e:
+       print("Notifications Error:", e)
        return jsonify([])
 
 

@@ -9,8 +9,6 @@ volumes:
 
 services:
 
-  # ── INFRASTRUCTURE ──────────────────────────────────────────────────────────
-
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     platform: linux/amd64
@@ -36,8 +34,8 @@ services:
       zookeeper:
         condition: service_healthy
     ports:
-      - "9092:9092" # for tools running on your Mac (localhost)
-      - "29092:29092" # for container-to-container traffic
+      - "9092:9092" 
+      - "29092:29092" 
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -70,8 +68,8 @@ services:
       test: [ "CMD", "cqlsh", "-e", "describe keyspaces" ]
       interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 90s
+      retries: 20
+      start_period: 600s
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.10
@@ -89,8 +87,8 @@ services:
       test: [ "CMD", "curl", "-f", "http://localhost:9200/_cluster/health" ]
       interval: 15s
       timeout: 10s
-      retries: 10
-      start_period: 30s
+      retries: 20
+      start_period: 600s
 
   redis:
     image: redis:7
@@ -100,36 +98,8 @@ services:
     ports:
       - "6379:6379"
 
-  # ── SPARK ───────────────────────────────────────────────────────────────────
 
-  spark-master:
-    image: apache/spark:3.5.1
-    platform: linux/amd64
-    container_name: spark-master
-    networks: [ intelligence-net ]
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
-    ports:
-      - "8080:8080"
-      - "7077:7077"
-    environment:
-      SPARK_MODE: master
 
-  spark-worker:
-    image: apache/spark:3.5.1
-    platform: linux/amd64
-    container_name: spark-worker
-    networks: [ intelligence-net ]
-    depends_on:
-      - spark-master
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
-    environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
-      SPARK_WORKER_MEMORY: 2G
-      SPARK_WORKER_CORES: 2
-
-  # ── CRAWLERS ────────────────────────────────────────────────────────────────
-  # Each crawler is a tiny image — just Python + kafka-python + feedparser
 
   crawler-news:
     build:
@@ -187,8 +157,6 @@ services:
       - PYTHONPATH=/app:/app/spark
     restart: unless-stopped
 
-  # ── SPARK STREAMING JOB ─────────────────────────────────────────────────────
-
   spark-streaming-job:
     platform: linux/amd64
     build:
@@ -208,8 +176,6 @@ services:
       CASSANDRA_HOST: cassandra
       ES_HOST: elasticsearch
     restart: on-failure
-
-  # ── APPLICATION ─────────────────────────────────────────────────────────────
 
   api:
     build:

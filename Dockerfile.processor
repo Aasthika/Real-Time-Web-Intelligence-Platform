@@ -33,12 +33,12 @@ RUN pip3 show pyspark | grep Location | awk '{print $2"/pyspark/jars"}' > /tmp/j
     JARS_DIR=$(cat /tmp/jars_path.txt) && \
     mkdir -p $JARS_DIR && \
     wget -q -P $JARS_DIR \
-        "https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.12/3.5.1/spark-sql-kafka-0-10_2.12-3.5.1.jar" \
-        "https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0-10_2.12/3.5.1/spark-token-provider-kafka-0-10_2.12-3.5.1.jar" \
-        "https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.4.1/kafka-clients-3.4.1.jar" \
-        "https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar" \
-        "https://repo1.maven.org/maven2/com/datastax/spark/spark-cassandra-connector-assembly_2.12/3.5.0/spark-cassandra-connector-assembly_2.12-3.5.0.jar" \
-        "https://repo1.maven.org/maven2/org/elasticsearch/elasticsearch-spark-30_2.12/7.17.10/elasticsearch-spark-30_2.12-7.17.10.jar"
+    "https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.12/3.5.1/spark-sql-kafka-0-10_2.12-3.5.1.jar" \
+    "https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0-10_2.12/3.5.1/spark-token-provider-kafka-0-10_2.12-3.5.1.jar" \
+    "https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.4.1/kafka-clients-3.4.1.jar" \
+    "https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar" \
+    "https://repo1.maven.org/maven2/com/datastax/spark/spark-cassandra-connector-assembly_2.12/3.5.0/spark-cassandra-connector-assembly_2.12-3.5.0.jar" \
+    "https://repo1.maven.org/maven2/org/elasticsearch/elasticsearch-spark-30_2.12/7.17.10/elasticsearch-spark-30_2.12-7.17.10.jar"
 
 # Copy spark code
 COPY spark/ ./spark/
@@ -56,13 +56,16 @@ CMD ["/bin/bash", "-c", "\
     until nc -z elasticsearch 9200; do echo 'waiting ES...';        sleep 3; done && \
     sleep 10 && \
     spark-submit \
-        --master local[2] \
-        --driver-memory 1g \
-        --conf spark.driver.host=spark-streaming-job \
-        --conf spark.driver.bindAddress=0.0.0.0 \
-        --conf spark.cassandra.connection.host=cassandra \
-        --conf spark.es.nodes=elasticsearch \
-        --conf spark.es.port=9200 \
-        --conf spark.es.nodes.wan.only=true \
-        /app/spark/streaming/spark_streaming.py \
-"]
+    --master local[2] \
+    --driver-memory 1g \
+    --conf spark.driver.host=spark-streaming-job \
+    --conf spark.driver.bindAddress=0.0.0.0 \
+    --conf spark.cassandra.connection.timeoutMS=120000 \
+    --conf spark.executor.heartbeatInterval=100000 \
+    --conf spark.network.timeout=300000 \
+    --conf spark.cassandra.connection.host=cassandra \
+    --conf spark.es.nodes=elasticsearch \
+    --conf spark.es.port=9200 \
+    --conf spark.es.nodes.wan.only=true \
+    /app/spark/streaming/spark_streaming.py \
+    "]

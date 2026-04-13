@@ -21,12 +21,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ── Read config from environment (Docker sets these) ─────────────────────────
 KAFKA_BROKER    = os.environ.get("KAFKA_BROKER",    "localhost:9092")
 CASSANDRA_HOST  = os.environ.get("CASSANDRA_HOST",  "127.0.0.1")
 ES_HOST         = os.environ.get("ES_HOST",         "localhost")
 
-# ── Spark Session ─────────────────────────────────────────────────────────────
 spark = SparkSession.builder \
     .appName("RealTimeWebIntelligence") \
     .config("spark.cassandra.connection.host", CASSANDRA_HOST) \
@@ -37,7 +35,6 @@ spark = SparkSession.builder \
 
 spark.sparkContext.setLogLevel("WARN")
 
-# ── Load ML Model ─────────────────────────────────────────────────────────────
 try:
     model = PipelineModel.load("/app/spark/models/category_classifier")
     logger.info("✅ ML model loaded")
@@ -47,7 +44,6 @@ except Exception as e:
 
 make_uuid = udf(lambda: str(uuid.uuid4()), StringType())
 
-# ── Kafka Schema ──────────────────────────────────────────────────────────────
 schema = StructType([
     StructField("title",     StringType(), True),
     StructField("link",      StringType(), True),
@@ -58,7 +54,6 @@ schema = StructType([
     StructField("timestamp", StringType(), True),
 ])
 
-# ── Kafka Source Stream ───────────────────────────────────────────────────────
 df = spark.readStream.format("kafka") \
     .option("kafka.bootstrap.servers", KAFKA_BROKER) \
     .option("subscribe", "news-topic,blog-topic,research-topic,social-topic") \
@@ -72,7 +67,6 @@ parsed = df.selectExpr("CAST(value AS STRING)", "topic AS kafka_topic") \
 
 text_df = parsed.withColumn("text", coalesce(col("title"), col("post")))
 
-# ── Batch Processor ───────────────────────────────────────────────────────────
 def process_batch(batch_df, batch_id):
     if batch_df.limit(1).count() == 0:
         return
@@ -116,8 +110,6 @@ def process_batch(batch_df, batch_id):
 
     # SINK 2: Perfect Classification using Native Stream Origin
     try:
-        # Instead of using an ML model that gets heavily biased by the hyperactive blog_crawler,
-        # we perfectly map the exact category directly from the ground-truth Kafka stream!
         results_df = batch_df.withColumn("category",
             when(col("kafka_topic") == "news-topic", "News")
             .when(col("kafka_topic") == "blog-topic", "Blog")
@@ -130,7 +122,6 @@ def process_batch(batch_df, batch_id):
         tokenized    = tokenize(cleaned)
         no_stopwords = remove_stopwords(tokenized)
 
-        # Retain category per word
         exploded = no_stopwords.select(explode(col("filtered_words")).alias("word"), col("category"))
         ranked_df = apply_enhanced_ranking(exploded.groupBy("word", "category").count())
 
@@ -170,7 +161,6 @@ def process_batch(batch_df, batch_id):
     except Exception as e:
         logger.error(f"❌ Alert Error: {e}")
 
-# ── Start Streaming ───────────────────────────────────────────────────────────
 query = text_df.writeStream \
     .foreachBatch(process_batch) \
     .option("checkpointLocation", "/tmp/spark-checkpoints/realtime") \

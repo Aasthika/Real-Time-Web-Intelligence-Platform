@@ -39,10 +39,11 @@ REMOTE_SCRIPT
 
 echo ""
 echo "📦 Step 2: Syncing local project files to the EC2 server..."
-rsync -avz -e "ssh -i $KEY_PATH -o StrictHostKeyChecking=no" \
+rsync -az -e "ssh -i $KEY_PATH -o StrictHostKeyChecking=no" \
     --exclude 'venv' --exclude '.git' --exclude '__pycache__' \
-    --exclude 'data' --exclude 'spark-checkpoints' \
-    ./ "$SERVER":~/web-intelligence-platform/
+    --exclude '/data' --exclude '/spark-checkpoints' \
+    ./ "$SERVER":~/web-intelligence-platform/ || { echo "❌ rsync failed — aborting."; exit 1; }
+echo "✅ Sync complete."
 
 echo ""
 echo "🏗️  Step 3: Building and launching the clustered containers remotely..."

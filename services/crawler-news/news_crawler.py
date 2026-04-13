@@ -11,7 +11,6 @@ logger = get_logger("news-crawler")
 TOPIC = "news-topic"
 
 
-# Expanded list to vary the traffic
 RSS_FEEDS = [
    "http://feeds.bbci.co.uk/news/rss.xml",
    "http://rss.cnn.com/rss/edition.rss",
@@ -19,7 +18,6 @@ RSS_FEEDS = [
 ]
 
 
-# Set a User-Agent so servers don't block the request
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 
@@ -32,7 +30,6 @@ producer = KafkaProducer(
 def fetch_news():
    for feed_url in RSS_FEEDS:
        try:
-           # Tell feedparser to act like a real browser
            feed = feedparser.parse(feed_url, agent=USER_AGENT)
 
 
@@ -53,8 +50,6 @@ def fetch_news():
                logger.info(f"Published to Kafka: {data['title'][:50]}")
                producer.send(TOPIC, data)
           
-           # 💡 CRITICAL: Sleep for 2 seconds between DIFFERENT feeds
-           # to avoid hitting servers all at once
            time.sleep(2)
 
 
@@ -68,7 +63,7 @@ def main():
    while True:
        fetch_news()
        print("🕒 Sleeping for 60 seconds before next crawl...")
-       time.sleep(30) # Increased to 60s to be safer
+       time.sleep(30) 
 
 
 if __name__ == "__main__":
