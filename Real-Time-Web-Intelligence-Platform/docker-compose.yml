@@ -159,6 +159,3 @@ services:
     depends_on:
       - kafka
 
-  networks:
-    realtime-network:
-      driver: bridge

@@ -196,14 +196,16 @@ def process_batch(batch_df, batch_id):
                 row["word"],
                 row["count"],
                 row["final_score"],
-                row["category"]
+                row["category"],
+                row.asDict().get("title"),
+                row.asDict().get("link"),
+                row.asDict().get("source")
             )
 
             print(f"🔥 Written: {row['word']} → {row['count']}")
 
         except Exception as e:
-            print("Write Error:", e)
-
+            print(f"❌ Write Error for {row['word']}:", e)
 
     # --------------------------------
     # Write Metadata

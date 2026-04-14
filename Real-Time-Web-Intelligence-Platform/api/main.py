@@ -115,3 +115,10 @@ def get_analytics():
             "status": "error",
             "message": str(e)
         }
+
+@app.get("/triggered-alerts")
+def alerts():
+
+    return {
+        "alerts": get_triggered_alerts()
+    }

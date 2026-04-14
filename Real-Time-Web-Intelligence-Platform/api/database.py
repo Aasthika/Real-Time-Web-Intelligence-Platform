@@ -101,17 +101,11 @@ def search_query(keyword):
     )
 
     results = []
-    seen = set()
 
     for hit in res["hits"]["hits"]:
+        results.append(hit["_source"])
 
-        data = hit["_source"]
-
-        if data["word"] not in seen:
-            results.append(data)
-            seen.add(data["word"])
-
-    return results[:20]
+    return results
 
 
 # --------------------------------
@@ -148,3 +142,21 @@ def add_alert(keyword):
             datetime.utcnow()
         )
     )
+
+def get_triggered_alerts():
+
+    session = get_session()
+
+    rows = session.execute(
+        "SELECT word, timestamp FROM triggered_alerts ALLOW FILTERING"
+    )
+
+    data = []
+
+    for row in rows:
+        data.append({
+            "word": row.word,
+            "timestamp": row.timestamp
+        })
+
+    return data
